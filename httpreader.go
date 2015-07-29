@@ -13,6 +13,8 @@ type Reader struct {
 	client *http.Client
 	url    string
 	offset int64
+
+	cache *cache
 }
 
 func NewReader(url string) *Reader {
@@ -22,6 +24,7 @@ func NewReader(url string) *Reader {
 		},
 		url:    url,
 		offset: 0,
+		cache:  newcache(),
 	}
 
 	return ra
@@ -30,6 +33,16 @@ func NewReader(url string) *Reader {
 // ReadAt implements io.ReaderAt.
 func (ra *Reader) ReadAt(p []byte, off int64) (n int, err error) {
 	count := int64(len(p))
+	if count < 8192 {
+		count = 8192
+	}
+
+	buf := ra.cache.get(off)
+	if buf != nil {
+		n = copy(p, buf)
+		return n, nil
+	}
+
 	req, err := http.NewRequest("GET", ra.url, nil)
 	if err != nil {
 		return 0, err
@@ -45,6 +58,8 @@ func (ra *Reader) ReadAt(p []byte, off int64) (n int, err error) {
 	defer resp.Body.Close()
 
 	n, err = io.ReadFull(resp.Body, p)
+
+	ra.cache.put(off, p)
 	return
 }
 
