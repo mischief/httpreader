@@ -51,7 +51,7 @@ func (ra *Reader) ReadAt(p []byte, off int64) (n int, err error) {
 // Read implements io.Reader.
 func (ra *Reader) Read(p []byte) (n int, err error) {
 	n, err = ra.ReadAt(p, ra.offset)
-	if err != nil {
+	if err == nil {
 		ra.offset += int64(n)
 	}
 	return
