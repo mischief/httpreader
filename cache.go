@@ -1,27 +1,28 @@
 package httpreader
 
 import (
-	"math"
+	"container/list"
 	"sync"
 )
 
 type cacheblock struct {
-	generation int
-	data       []byte
+	lru    list.Element
+	offset int64
+	data   []byte
 }
 
 type cache struct {
-	mu         sync.RWMutex
-	generation int
-	maxblocks  int
-	blocks     map[int64]cacheblock
+	mu        sync.RWMutex
+	maxblocks int
+	blocks    map[int64]cacheblock
+	lru       *list.List
 }
 
 func newcache() *cache {
 	return &cache{
-		generation: 0,
-		maxblocks:  100,
-		blocks:     make(map[int64]cacheblock),
+		maxblocks: 100,
+		blocks:    make(map[int64]cacheblock),
+		lru:       list.New(),
 	}
 }
 
@@ -30,19 +31,11 @@ func (c *cache) evictold() {
 		return
 	}
 
-	oldblk := int64(0)
-	oldest := math.MaxInt32
-	for off, blk := range c.blocks {
-		if blk.generation < oldest {
-			oldblk = off
-			oldest = blk.generation
-		}
-	}
-
-	delete(c.blocks, oldblk)
+	oldblk := c.lru.Remove(c.lru.Back()).(cacheblock)
+	delete(c.blocks, oldblk.offset)
 }
 
-func (c *cache) put(offset int64, block []byte) {
+func (c *cache) put(offset int64, data []byte) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -51,9 +44,9 @@ func (c *cache) put(offset int64, block []byte) {
 		return
 	}
 
-	gen := c.generation
-	c.generation++
-	c.blocks[offset] = cacheblock{gen, block}
+	blk := cacheblock{offset: offset, data: data}
+	c.blocks[offset] = blk
+	c.lru.PushFront(blk)
 
 	c.evictold()
 }
@@ -66,6 +59,8 @@ func (c *cache) get(offset int64) []byte {
 	if !ok {
 		return nil
 	}
+
+	c.lru.MoveToFront(&blk.lru)
 
 	return blk.data
 }
