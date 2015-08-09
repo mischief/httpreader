@@ -15,13 +15,13 @@ func TestCache(t *testing.T) {
 		// check for presence
 		buf := c.get(0)
 		if buf == nil {
-			t.Errorf("expected cache block %d got nil", 0, buf)
+			t.Errorf("%d: expected cache block %d got nil", i, 0, buf)
 			return
 		}
 	}
 
 	// check for eviction
-	buf := c.get(0)
+	buf := c.get(512)
 	if buf != nil {
 		t.Errorf("expected nil got %v", buf)
 		return
