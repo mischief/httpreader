@@ -17,7 +17,7 @@ type Reader struct {
 	offset int64
 	size   int64
 
-	cache *cache.Cache
+	*cache.Cache // embedding gives us the cached ReadAt method.
 }
 
 func NewReader(url string) (*Reader, error) {
@@ -35,14 +35,9 @@ func NewReader(url string) (*Reader, error) {
 	}
 
 	ra.size = size
-	ra.cache = cache.NewCache(32768, 100, size)
+	ra.Cache = cache.NewCache(32768, 100, size, &fetcher{ra: ra})
 
 	return ra, nil
-}
-
-// ReadAt implements io.ReaderAt.
-func (ra *Reader) ReadAt(p []byte, off int64) (n int, err error) {
-	return ra.cache.Get(p, off, &fetcher{ra: ra})
 }
 
 // Read implements io.Reader.

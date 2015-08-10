@@ -13,6 +13,7 @@ type Cache struct {
 	lru       *list.List
 	blockSize int
 	size      int64
+	reader    io.ReaderAt
 }
 
 type cacheBlock struct {
@@ -22,21 +23,22 @@ type cacheBlock struct {
 }
 
 // NewCache returns a new cache instance.
-func NewCache(blockSize, maxBlocks int, size int64) *Cache {
+// Reads may be performed concurrently on the same cache,
+// provided the reader supplied here is safe for concurrent usage.
+func NewCache(blockSize, maxBlocks int, size int64, reader io.ReaderAt) *Cache {
 	return &Cache{
 		maxBlocks: maxBlocks,
 		blocks:    make(map[int64]*cacheBlock),
 		lru:       list.New(),
 		blockSize: blockSize,
 		size:      size,
+		reader:    reader,
 	}
 }
 
-// Get reads the requested data via the cache,
-// populating the cache with reader.ReadAt() as needed.
-// This may be called concurrently on the same cache,
-// provided reader is safe for concurrent usage.
-func (c *Cache) Get(p []byte, offset int64, reader io.ReaderAt) (n int, err error) {
+// ReadAt reads the requested data via the cache,
+// populating the cache with c.reader.ReadAt() as needed.
+func (c *Cache) ReadAt(p []byte, offset int64) (n int, err error) {
 	for ao := c.blockAlign(offset); n < len(p); ao += int64(c.blockSize) {
 		blk := c.getBlock(ao, false)
 		if blk == nil {
@@ -49,7 +51,7 @@ func (c *Cache) Get(p []byte, offset int64, reader io.ReaderAt) (n int, err erro
 			}
 
 			blk = &cacheBlock{offset: ao, data: make([]byte, bsize)}
-			if x, err := reader.ReadAt(blk.data, ao); err != nil {
+			if x, err := c.reader.ReadAt(blk.data, ao); err != nil {
 				return n + x, err
 			}
 

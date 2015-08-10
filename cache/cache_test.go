@@ -11,7 +11,7 @@ const (
 )
 
 func TestCache(t *testing.T) {
-	c := NewCache(blockSize, maxBlocks, maxBlocks*blockSize)
+	c := NewCache(blockSize, maxBlocks, maxBlocks*blockSize, nil)
 
 	for i := 0; i < maxBlocks+1; i++ {
 		blk := &cacheBlock{
