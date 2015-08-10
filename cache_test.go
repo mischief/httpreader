@@ -5,25 +5,33 @@ import (
 	"testing"
 )
 
-func TestCache(t *testing.T) {
-	c := newcache()
+const (
+	blockSize = 512
+	maxBlocks = 100
+)
 
-	for i := 0; i < 150; i++ {
-		b := bytes.Repeat([]byte{byte(i)}, 512)
-		c.put(int64(i*512), b)
+func TestCache(t *testing.T) {
+	c := NewCache(blockSize, maxBlocks, maxBlocks*blockSize)
+
+	for i := 0; i < maxBlocks+1; i++ {
+		blk := &cacheBlock{
+			offset: int64(i * blockSize),
+			data:   bytes.Repeat([]byte{byte(i)}, blockSize),
+		}
+		c.addBlock(blk)
 
 		// check for presence
-		buf := c.get(0)
-		if buf == nil {
-			t.Errorf("%d: expected cache block %d got nil", i, 0, buf)
+		cblk := c.getBlock(0, false)
+		if cblk == nil {
+			t.Errorf("%d: expected cache block 0 got nil", i)
 			return
 		}
 	}
 
 	// check for eviction
-	buf := c.get(512)
-	if buf != nil {
-		t.Errorf("expected nil got %v", buf)
+	cblk := c.getBlock(blockSize, false)
+	if cblk != nil {
+		t.Errorf("expected nil got %v", cblk)
 		return
 	}
 }

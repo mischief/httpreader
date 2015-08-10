@@ -35,7 +35,10 @@ func init() {
 }
 
 func TestReaderAt(t *testing.T) {
-	ra := NewReader(testURL)
+	ra, err := NewReader(testURL)
+	if err != nil {
+		t.Fatalf("NewReader error: %v", err)
+	}
 	defer ra.Close()
 	buf := make([]byte, testBlockSize)
 
@@ -60,7 +63,10 @@ func TestReaderAt(t *testing.T) {
 }
 
 func TestReader(t *testing.T) {
-	ra := NewReader(testURL)
+	ra, err := NewReader(testURL)
+	if err != nil {
+		t.Fatalf("NewReader error: %v", err)
+	}
 	defer ra.Close()
 
 	// twice to hit cache
@@ -103,7 +109,10 @@ func TestReader(t *testing.T) {
 }
 
 func BenchmarkRead(b *testing.B) {
-	ra := NewReader(testURL)
+	ra, err := NewReader(testURL)
+	if err != nil {
+		b.Fatalf("NewReader error: %v", err)
+	}
 	buf := make([]byte, testBlockSize)
 
 	for i := 0; i < b.N; i++ {
