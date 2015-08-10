@@ -5,6 +5,8 @@ import (
 	"io"
 	"net/http"
 	"time"
+
+	"github.com/mischief/httpreader/cache"
 )
 
 // Reader reads files served over http/https from servers supporting http range
@@ -15,7 +17,7 @@ type Reader struct {
 	offset int64
 	size   int64
 
-	cache *Cache
+	cache *cache.Cache
 }
 
 func NewReader(url string) (*Reader, error) {
@@ -33,7 +35,7 @@ func NewReader(url string) (*Reader, error) {
 	}
 
 	ra.size = size
-	ra.cache = NewCache(32768, 100, size)
+	ra.cache = cache.NewCache(32768, 100, size)
 
 	return ra, nil
 }

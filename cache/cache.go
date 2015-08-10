@@ -1,4 +1,4 @@
-package httpreader
+package cache
 
 import (
 	"container/list"
