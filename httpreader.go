@@ -5,6 +5,8 @@ import (
 	"io"
 	"net/http"
 	"time"
+
+	"github.com/mischief/httpreader/cache"
 )
 
 // Reader reads files served over http/https from servers supporting http range
@@ -13,54 +15,29 @@ type Reader struct {
 	client *http.Client
 	url    string
 	offset int64
+	size   int64
 
-	cache *cache
+	*cache.Cache // embedding gives us the cached ReadAt method.
 }
 
-func NewReader(url string) *Reader {
+func NewReader(url string) (*Reader, error) {
 	ra := &Reader{
 		client: &http.Client{
 			Timeout: 10 * time.Second,
 		},
 		url:    url,
 		offset: 0,
-		cache:  newcache(),
 	}
 
-	return ra
-}
-
-// ReadAt implements io.ReaderAt.
-func (ra *Reader) ReadAt(p []byte, off int64) (n int, err error) {
-	count := int64(len(p))
-	if count < 8192 {
-		count = 8192
-	}
-
-	buf := ra.cache.get(off)
-	if buf != nil {
-		n = copy(p, buf)
-		return n, nil
-	}
-
-	req, err := http.NewRequest("GET", ra.url, nil)
+	size, err := ra.getSize()
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 
-	req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", off, off+count))
+	ra.size = size
+	ra.Cache = cache.NewCache(32768, 100, size, &fetcher{ra: ra})
 
-	resp, err := ra.client.Do(req)
-	if err != nil {
-		return 0, err
-	}
-
-	defer resp.Body.Close()
-
-	n, err = io.ReadFull(resp.Body, p)
-
-	ra.cache.put(off, p)
-	return
+	return ra, nil
 }
 
 // Read implements io.Reader.
@@ -96,11 +73,16 @@ func (ra *Reader) Seek(offset int64, whence int) (int64, error) {
 	return ra.offset, nil
 }
 
-// Size returns the size of the content. It will return an error if
+// Size returns the size of the content.
+func (ra *Reader) Size() (int64, error) {
+	return ra.size, nil
+}
+
+// getSize returns the size of the content. It will return an error if
 // the remote server does not support HEAD requests or the
 // Content-Length header.
-func (ra *Reader) Size() (int64, error) {
-	// stat remote file
+func (ra *Reader) getSize() (int64, error) {
+	// stat remote file, make sure it's seekable
 	resp, err := ra.client.Head(ra.url)
 	if err != nil {
 		return 0, err
@@ -121,3 +103,25 @@ var (
 	_ io.Seeker   = &Reader{}
 	_ io.ReaderAt = &Reader{}
 )
+
+// fetcher fulfills a ReaderAt interface for the cache populator.
+type fetcher struct {
+	ra *Reader
+}
+
+func (f *fetcher) ReadAt(p []byte, off int64) (n int, err error) {
+	req, err := http.NewRequest("GET", f.ra.url, nil)
+	if err != nil {
+		return 0, err
+	}
+
+	req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", off, off+int64(len(p))))
+
+	resp, err := f.ra.client.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+
+	return io.ReadFull(resp.Body, p)
+}
